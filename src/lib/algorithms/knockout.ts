@@ -7,36 +7,42 @@ export const KnockoutAlgorithm: PairingAlgorithm = {
   description: 'Standard single-elimination bracket. Losers are immediately eliminated, winners advance until one champion remains.',
 
   generateFirstRound(teams: Team[]): Round[] {
+    let P = 2;
+    while (P < teams.length) {
+      P *= 2;
+    }
+
+    const numByes = P - teams.length;
     const matches: Match[] = [];
     let matchNumber = 1;
+    let teamIdx = 0;
 
-    for (let i = 0; i < teams.length; i += 2) {
-      const team1 = teams[i];
-      const team2 = teams[i + 1]; // could be undefined if odd number of teams
+    for (let b = 0; b < numByes; b++) {
+      const team = teams[teamIdx++];
+      matches.push({
+        id: `r1-m${matchNumber}`,
+        roundNumber: 1,
+        matchNumber: matchNumber++,
+        team1: team,
+        team2: undefined,
+        status: 'bye',
+        winner: team,
+        bracket: 'winners'
+      });
+    }
 
-      if (!team2) {
-        // Bye match
-        matches.push({
-          id: `r1-m${matchNumber}`,
-          roundNumber: 1,
-          matchNumber: matchNumber++,
-          team1,
-          team2: undefined,
-          status: 'bye',
-          winner: team1,
-          bracket: 'winners'
-        });
-      } else {
-        matches.push({
-          id: `r1-m${matchNumber}`,
-          roundNumber: 1,
-          matchNumber: matchNumber++,
-          team1,
-          team2,
-          status: 'pending',
-          bracket: 'winners'
-        });
-      }
+    while (teamIdx < teams.length) {
+      const team1 = teams[teamIdx++];
+      const team2 = teams[teamIdx++];
+      matches.push({
+        id: `r1-m${matchNumber}`,
+        roundNumber: 1,
+        matchNumber: matchNumber++,
+        team1,
+        team2,
+        status: 'pending',
+        bracket: 'winners'
+      });
     }
 
     return [{

@@ -159,18 +159,12 @@
   function handleSaveScore(matchId: string, rawScore: string) {
     if (!activeManager) return;
     activeManager.recordMatchScore(matchId, rawScore);
-    refreshState();
-    showToast('Match score recorded!', 'success');
-  }
-
-  function handleAdvanceRound() {
-    if (!activeManager) return;
     const advanced = activeManager.advanceRound();
     refreshState();
     if (advanced) {
-      showToast('Advanced to next round matchups!', 'success');
+      showToast('Score recorded & advanced to next round!', 'success');
     } else {
-      showToast('Tournament completed! All rounds finished.', 'success');
+      showToast('Score recorded!', 'success');
     }
   }
 
@@ -180,6 +174,17 @@
     if (renamed) {
       refreshState();
       showToast(`Renamed participant to "${newName}"`, 'success');
+    }
+  }
+
+  function handleUndo() {
+    if (!activeManager) return;
+    const success = activeManager.undo();
+    if (success) {
+      refreshState();
+      showToast('Undo successful! Match score & pairings reverted.', 'info');
+    } else {
+      showToast('No actions to undo.', 'error');
     }
   }
 
@@ -220,7 +225,7 @@
   }
 </script>
 
-<div class="min-h-screen flex flex-col bg-[#070707] text-white selection:bg-[#10B981] selection:text-[#070707]">
+<div class="min-h-screen flex flex-col bg-[#e0e5ec] text-slate-800 selection:bg-emerald-500 selection:text-white">
   <Navbar 
     activeTournamentName={activeState ? activeState.name : ''}
     onHome={handleHome}
@@ -253,8 +258,9 @@
     {:else if view === 'tournament' && activeState}
       <TournamentView 
         tournamentState={activeState}
+        canUndo={activeManager ? activeManager.canUndo() : false}
+        onUndo={handleUndo}
         onSelectMatch={handleSelectMatch}
-        onAdvanceRound={handleAdvanceRound}
         onRenameTeam={handleRenameTeam}
         onShareLink={handleShareLink}
         onExportJson={handleExportJson}

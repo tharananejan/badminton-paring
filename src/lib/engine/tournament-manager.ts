@@ -98,6 +98,61 @@ export class TournamentManager {
   }
 
   /**
+   * Save current state snapshot into history stack before a mutating change.
+   */
+  private saveSnapshot(): void {
+    if (!this.state.history) {
+      this.state.history = [];
+    }
+    // Limit history stack size to 25 states to prevent memory growth
+    const MAX_HISTORY = 25;
+    const snapshot = JSON.parse(JSON.stringify({
+      id: this.state.id,
+      name: this.state.name,
+      type: this.state.type,
+      status: this.state.status,
+      teams: this.state.teams,
+      rounds: this.state.rounds,
+      standings: this.state.standings,
+      currentRound: this.state.currentRound,
+      createdAt: this.state.createdAt,
+      updatedAt: this.state.updatedAt
+    }));
+
+    this.state.history.push(snapshot);
+    if (this.state.history.length > MAX_HISTORY) {
+      this.state.history.shift();
+    }
+  }
+
+  /**
+   * Check if an undo action is available.
+   */
+  canUndo(): boolean {
+    return !!(this.state.history && this.state.history.length > 0);
+  }
+
+  /**
+   * Revert tournament state to the previous recorded score / action state.
+   */
+  undo(): boolean {
+    if (!this.canUndo() || !this.state.history) return false;
+
+    const previousState = this.state.history.pop();
+    if (!previousState) return false;
+
+    const historyStack = this.state.history;
+    this.state = {
+      ...previousState,
+      history: historyStack,
+      updatedAt: Date.now()
+    };
+
+    this.sync();
+    return true;
+  }
+
+  /**
    * Record match score (e.g. "21-4, 15-8" or "21-19") and decide winner.
    */
   recordMatchScore(matchId: string, rawScore: string): Match | null {
@@ -115,6 +170,10 @@ export class TournamentManager {
     }
 
     const score = parseScore(rawScore, match.team1, match.team2);
+
+    // Push snapshot before mutating match score & advancing round
+    this.saveSnapshot();
+
     match.score = score;
     match.status = 'completed';
 

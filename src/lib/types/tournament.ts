@@ -60,6 +60,7 @@ export interface TournamentState {
   rounds: Round[];
   standings: Standing[];
   currentRound: number;
+  history?: Array<Omit<TournamentState, 'history'>>;
   createdAt: number;
   updatedAt: number;
 }

@@ -7,35 +7,44 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
   description: 'Players must lose twice to be eliminated. Features a Winners Bracket, Losers (Redemption) Bracket, and Grand Finals.',
 
   generateFirstRound(teams: Team[]): Round[] {
+    let P = 2;
+    while (P < teams.length) {
+      P *= 2;
+    }
+
+    const numByes = P - teams.length;
     const matches: Match[] = [];
     let matchNumber = 1;
+    let teamIdx = 0;
 
-    for (let i = 0; i < teams.length; i += 2) {
-      const team1 = teams[i];
-      const team2 = teams[i + 1];
+    // First, create BYE matches for top seeds
+    for (let b = 0; b < numByes; b++) {
+      const team = teams[teamIdx++];
+      matches.push({
+        id: `w-r1-m${matchNumber}`,
+        roundNumber: 1,
+        matchNumber: matchNumber++,
+        team1: team,
+        team2: undefined,
+        status: 'bye',
+        winner: team,
+        bracket: 'winners'
+      });
+    }
 
-      if (!team2) {
-        matches.push({
-          id: `w-r1-m${matchNumber}`,
-          roundNumber: 1,
-          matchNumber: matchNumber++,
-          team1,
-          team2: undefined,
-          status: 'bye',
-          winner: team1,
-          bracket: 'winners'
-        });
-      } else {
-        matches.push({
-          id: `w-r1-m${matchNumber}`,
-          roundNumber: 1,
-          matchNumber: matchNumber++,
-          team1,
-          team2,
-          status: 'pending',
-          bracket: 'winners'
-        });
-      }
+    // Next, pair remaining teams into real matches
+    while (teamIdx < teams.length) {
+      const team1 = teams[teamIdx++];
+      const team2 = teams[teamIdx++];
+      matches.push({
+        id: `w-r1-m${matchNumber}`,
+        roundNumber: 1,
+        matchNumber: matchNumber++,
+        team1,
+        team2,
+        status: 'pending',
+        bracket: 'winners'
+      });
     }
 
     return [{
@@ -50,50 +59,51 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
     const lastRound = currentRounds[currentRounds.length - 1];
     if (!lastRound) return this.generateFirstRound(teams);
 
-    const unfinished = lastRound.matches.some(m => m.status === 'pending' || m.status === 'in-progress');
-    if (unfinished) return currentRounds;
-
-    // Separate all completed matches across all rounds by bracket
-    const winnersBracketMatches = currentRounds.flatMap(r => r.matches.filter(m => m.bracket === 'winners'));
-    const losersBracketMatches = currentRounds.flatMap(r => r.matches.filter(m => m.bracket === 'losers'));
-    const finalsMatches = currentRounds.flatMap(r => r.matches.filter(m => m.bracket === 'grand-finals'));
-
-    if (finalsMatches.length > 0) {
-      // Grand finals has been generated. If finished, nothing more.
+    const hasUnfinishedMatches = currentRounds.some(r =>
+      r.matches.some(m => m.status === 'pending' || m.status === 'in-progress')
+    );
+    if (hasUnfinishedMatches) {
       return currentRounds;
     }
 
-    // Find active teams remaining in Winners Bracket (winners of latest winners round)
-    const latestWinnersRoundNum = Math.max(...winnersBracketMatches.map(m => m.roundNumber), 0);
-    const latestWinnersRoundMatches = winnersBracketMatches.filter(m => m.roundNumber === latestWinnersRoundNum);
-    const activeWinnersBracketTeams = latestWinnersRoundMatches
-      .map(m => m.winner)
-      .filter((t): t is Team => t !== undefined);
+    const winnersRounds = currentRounds.filter(r => r.bracket === 'winners');
+    const losersRounds = currentRounds.filter(r => r.bracket === 'losers');
+    const grandFinalsRounds = currentRounds.filter(r => r.bracket === 'grand-finals');
 
-    // Find all losers from latest Winners Bracket round who just dropped down
-    const newLosersFromWinners = latestWinnersRoundMatches
-      .map(m => (m.status === 'completed' && m.winner ? (m.winner.id === m.team1?.id ? m.team2 : m.team1) : undefined))
-      .filter((t): t is Team => t !== undefined);
-
-    // Find active teams remaining in Losers Bracket
-    const latestLosersRoundNum = Math.max(...losersBracketMatches.map(m => m.roundNumber), 0);
-    const latestLosersRoundMatches = losersBracketMatches.filter(m => m.roundNumber === latestLosersRoundNum);
-    
-    let activeLosersBracketTeams: Team[] = [];
-    if (latestLosersRoundNum === 0) {
-      // No losers rounds yet -> active losers are just those who lost in Winners Round 1
-      activeLosersBracketTeams = [...newLosersFromWinners];
-    } else {
-      // Winners of latest losers round + any new losers from winners bracket
-      const winnersOfLosers = latestLosersRoundMatches
-        .map(m => m.winner)
-        .filter((t): t is Team => t !== undefined);
-      
-      activeLosersBracketTeams = [...winnersOfLosers, ...newLosersFromWinners];
+    if (grandFinalsRounds.length > 0) {
+      return currentRounds;
     }
 
-    // Check if we are ready for Grand Finals (1 player in Winners, 1 player in Losers, and no pending losers matches needed)
-    if (activeWinnersBracketTeams.length === 1 && activeLosersBracketTeams.length === 1 && newLosersFromWinners.length === 0) {
+    const latestWRound = winnersRounds[winnersRounds.length - 1];
+    const activeWinners: Team[] = latestWRound
+      ? latestWRound.matches.map(m => m.winner).filter((t): t is Team => t !== undefined)
+      : [];
+
+    const teamsInLosersBracket = new Set<string>();
+    for (const r of losersRounds) {
+      for (const m of r.matches) {
+        if (m.team1) teamsInLosersBracket.add(m.team1.id);
+        if (m.team2) teamsInLosersBracket.add(m.team2.id);
+      }
+    }
+
+    const newWLosers: Team[] = [];
+    for (const r of winnersRounds) {
+      for (const m of r.matches) {
+        if ((m.status === 'completed' || m.status === 'bye') && m.loser) {
+          if (!teamsInLosersBracket.has(m.loser.id)) {
+            newWLosers.push(m.loser);
+          }
+        }
+      }
+    }
+
+    const latestLRound = losersRounds.length > 0 ? losersRounds[losersRounds.length - 1] : null;
+    const latestLWinners: Team[] = latestLRound
+      ? latestLRound.matches.map(m => m.winner).filter((t): t is Team => t !== undefined)
+      : [];
+
+    if (activeWinners.length === 1 && latestLWinners.length === 1 && newWLosers.length === 0) {
       const nextRoundNum = lastRound.roundNumber + 1;
       const grandFinalsRound: Round = {
         roundNumber: nextRoundNum,
@@ -103,8 +113,8 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
           id: `gf-r${nextRoundNum}-m1`,
           roundNumber: nextRoundNum,
           matchNumber: 1,
-          team1: activeWinnersBracketTeams[0], // Winners bracket champ
-          team2: activeLosersBracketTeams[0],  // Losers bracket champ
+          team1: activeWinners[0],
+          team2: latestLWinners[0],
           status: 'pending',
           bracket: 'grand-finals'
         }]
@@ -112,24 +122,22 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
       return [...currentRounds, grandFinalsRound];
     }
 
-    // Otherwise, generate the next round(s) needed.
     const newRoundsToAdd: Round[] = [];
-    const nextRoundNum = lastRound.roundNumber + 1;
+    let nextRoundNum = lastRound.roundNumber + 1;
 
-    // 1. Can we generate another Winners Bracket round?
-    if (activeWinnersBracketTeams.length >= 2) {
+    if (activeWinners.length >= 2) {
+      const nextWRoundNum = winnersRounds.length + 1;
       const matches: Match[] = [];
       let matchNumber = 1;
-      const nextWRoundNum = latestWinnersRoundNum + 1;
 
-      for (let i = 0; i < activeWinnersBracketTeams.length; i += 2) {
-        const t1 = activeWinnersBracketTeams[i];
-        const t2 = activeWinnersBracketTeams[i + 1];
+      for (let i = 0; i < activeWinners.length; i += 2) {
+        const t1 = activeWinners[i];
+        const t2 = activeWinners[i + 1];
         if (!t2) {
           matches.push({
-            id: `w-r${nextWRoundNum}-m${matchNumber++}`,
+            id: `w-r${nextWRoundNum}-m${matchNumber}`,
             roundNumber: nextWRoundNum,
-            matchNumber: matches.length + 1,
+            matchNumber: matchNumber++,
             team1: t1,
             team2: undefined,
             status: 'bye',
@@ -138,9 +146,9 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
           });
         } else {
           matches.push({
-            id: `w-r${nextWRoundNum}-m${matchNumber++}`,
+            id: `w-r${nextWRoundNum}-m${matchNumber}`,
             roundNumber: nextWRoundNum,
-            matchNumber: matches.length + 1,
+            matchNumber: matchNumber++,
             team1: t1,
             team2: t2,
             status: 'pending',
@@ -149,52 +157,137 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
         }
       }
       newRoundsToAdd.push({
-        roundNumber: nextRoundNum,
+        roundNumber: nextRoundNum++,
         name: `Winners Round ${nextWRoundNum}`,
         bracket: 'winners',
         matches
       });
     }
 
-    // 2. Can we generate a Losers Bracket round?
-    if (activeLosersBracketTeams.length >= 2) {
-      const matches: Match[] = [];
-      let matchNumber = 1;
-      const nextLRoundNum = latestLosersRoundNum + 1;
-      const roundNumForThis = newRoundsToAdd.length > 0 ? nextRoundNum + 1 : nextRoundNum;
+    const nextLRoundNum = losersRounds.length + 1;
 
-      for (let i = 0; i < activeLosersBracketTeams.length; i += 2) {
-        const t1 = activeLosersBracketTeams[i];
-        const t2 = activeLosersBracketTeams[i + 1];
-        if (!t2) {
-          matches.push({
-            id: `l-r${nextLRoundNum}-m${matchNumber++}`,
-            roundNumber: nextLRoundNum,
-            matchNumber: matches.length + 1,
-            team1: t1,
-            team2: undefined,
-            status: 'bye',
-            winner: t1,
-            bracket: 'losers'
-          });
-        } else {
-          matches.push({
-            id: `l-r${nextLRoundNum}-m${matchNumber++}`,
-            roundNumber: nextLRoundNum,
-            matchNumber: matches.length + 1,
-            team1: t1,
-            team2: t2,
-            status: 'pending',
-            bracket: 'losers'
-          });
+    if (nextLRoundNum === 1) {
+      if (newWLosers.length >= 1) {
+        const matches: Match[] = [];
+        let matchNumber = 1;
+
+        for (let i = 0; i < newWLosers.length; i += 2) {
+          const t1 = newWLosers[i];
+          const t2 = newWLosers[i + 1];
+          if (!t2) {
+            matches.push({
+              id: `l-r1-m${matchNumber}`,
+              roundNumber: 1,
+              matchNumber: matchNumber++,
+              team1: t1,
+              team2: undefined,
+              status: 'bye',
+              winner: t1,
+              bracket: 'losers'
+            });
+          } else {
+            matches.push({
+              id: `l-r1-m${matchNumber}`,
+              roundNumber: 1,
+              matchNumber: matchNumber++,
+              team1: t1,
+              team2: t2,
+              status: 'pending',
+              bracket: 'losers'
+            });
+          }
         }
+        newRoundsToAdd.push({
+          roundNumber: nextRoundNum++,
+          name: 'Losers Round 1',
+          bracket: 'losers',
+          matches
+        });
       }
-      newRoundsToAdd.push({
-        roundNumber: roundNumForThis,
-        name: `Losers Round ${nextLRoundNum}`,
-        bracket: 'losers',
-        matches
-      });
+    } else if (nextLRoundNum % 2 === 0) {
+      if (latestLWinners.length > 0 && newWLosers.length > 0) {
+        const matches: Match[] = [];
+        let matchNumber = 1;
+
+        // Pair lower bracket winners vs incoming drop-down losers in natural bracket order
+        const pairedWLosers = [...newWLosers].reverse();
+        const count = Math.max(latestLWinners.length, pairedWLosers.length);
+
+        for (let i = 0; i < count; i++) {
+          const t1 = latestLWinners[i];
+          const t2 = pairedWLosers[i];
+
+          if (!t1 || !t2) {
+            const soloTeam = t1 || t2;
+            matches.push({
+              id: `l-r${nextLRoundNum}-m${matchNumber}`,
+              roundNumber: nextLRoundNum,
+              matchNumber: matchNumber++,
+              team1: soloTeam,
+              team2: undefined,
+              status: 'bye',
+              winner: soloTeam,
+              bracket: 'losers'
+            });
+          } else {
+            matches.push({
+              id: `l-r${nextLRoundNum}-m${matchNumber}`,
+              roundNumber: nextLRoundNum,
+              matchNumber: matchNumber++,
+              team1: t1,
+              team2: t2,
+              status: 'pending',
+              bracket: 'losers'
+            });
+          }
+        }
+        newRoundsToAdd.push({
+          roundNumber: nextRoundNum++,
+          name: `Losers Round ${nextLRoundNum}`,
+          bracket: 'losers',
+          matches
+        });
+      }
+    } else {
+      // Odd Losers Round (L3, L5...): Pair previous LB winners among themselves
+      if (latestLWinners.length >= 1) {
+        const matches: Match[] = [];
+        let matchNumber = 1;
+
+        for (let i = 0; i < latestLWinners.length; i += 2) {
+          const t1 = latestLWinners[i];
+          const t2 = latestLWinners[i + 1];
+
+          if (!t2) {
+            matches.push({
+              id: `l-r${nextLRoundNum}-m${matchNumber}`,
+              roundNumber: nextLRoundNum,
+              matchNumber: matchNumber++,
+              team1: t1,
+              team2: undefined,
+              status: 'bye',
+              winner: t1,
+              bracket: 'losers'
+            });
+          } else {
+            matches.push({
+              id: `l-r${nextLRoundNum}-m${matchNumber}`,
+              roundNumber: nextLRoundNum,
+              matchNumber: matchNumber++,
+              team1: t1,
+              team2: t2,
+              status: 'pending',
+              bracket: 'losers'
+            });
+          }
+        }
+        newRoundsToAdd.push({
+          roundNumber: nextRoundNum++,
+          name: `Losers Round ${nextLRoundNum}`,
+          bracket: 'losers',
+          matches
+        });
+      }
     }
 
     if (newRoundsToAdd.length === 0) {
@@ -205,10 +298,10 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
   },
 
   calculateStandings(rounds: Round[], teams: Team[]): Standing[] {
-    const statsMap = new Map<string, { played: number; won: number; lost: number; pointsDiff: number; setsDiff: number; isEliminated: boolean }>();
+    const statsMap = new Map<string, { played: number; won: number; lost: number; pointsDiff: number; setsDiff: number; highestRoundReached: number }>();
 
     for (const team of teams) {
-      statsMap.set(team.id, { played: 0, won: 0, lost: 0, pointsDiff: 0, setsDiff: 0, isEliminated: false });
+      statsMap.set(team.id, { played: 0, won: 0, lost: 0, pointsDiff: 0, setsDiff: 0, highestRoundReached: 0 });
     }
 
     for (const round of rounds) {
@@ -216,6 +309,7 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
         if (match.status === 'completed' || match.status === 'bye') {
           if (match.team1 && statsMap.has(match.team1.id)) {
             const s = statsMap.get(match.team1.id)!;
+            s.highestRoundReached = Math.max(s.highestRoundReached, round.roundNumber);
             if (match.status === 'completed') {
               s.played++;
               if (match.score) {
@@ -223,16 +317,15 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
                 s.setsDiff += (match.score.team1Sets - match.score.team2Sets);
               }
               if (match.winner?.id === match.team1.id) s.won++;
-              else {
-                s.lost++;
-                if (s.lost >= 2) s.isEliminated = true;
-              }
+              else s.lost++;
             } else if (match.status === 'bye') {
               s.won++;
             }
           }
+
           if (match.team2 && statsMap.has(match.team2.id)) {
             const s = statsMap.get(match.team2.id)!;
+            s.highestRoundReached = Math.max(s.highestRoundReached, round.roundNumber);
             if (match.status === 'completed') {
               s.played++;
               if (match.score) {
@@ -240,10 +333,7 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
                 s.setsDiff += (match.score.team2Sets - match.score.team1Sets);
               }
               if (match.winner?.id === match.team2.id) s.won++;
-              else {
-                s.lost++;
-                if (s.lost >= 2) s.isEliminated = true;
-              }
+              else s.lost++;
             }
           }
         }
@@ -266,8 +356,13 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
     standings.sort((a, b) => {
       const sA = statsMap.get(a.team.id)!;
       const sB = statsMap.get(b.team.id)!;
-      if (sA.isEliminated !== sB.isEliminated) return sA.isEliminated ? 1 : -1;
+      // Sort by fewest losses first (0 loss champ, 1 loss runner-up, 2 losses eliminated)
+      if (sA.lost !== sB.lost) return sA.lost - sB.lost;
+      // Then by highest round reached
+      if (sB.highestRoundReached !== sA.highestRoundReached) return sB.highestRoundReached - sA.highestRoundReached;
+      // Then by wins
       if (b.won !== a.won) return b.won - a.won;
+      // Then by sets diff and points diff
       if (b.setsDifference !== a.setsDifference) return b.setsDifference - a.setsDifference;
       return b.pointsDifference - a.pointsDifference;
     });
@@ -284,3 +379,4 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
     return false;
   }
 };
+

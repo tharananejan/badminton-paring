@@ -45,7 +45,7 @@
     <button 
       type="button" 
       onclick={onBack}
-      class="inline-flex items-center gap-1.5 text-xs font-semibold text-white/60 hover:text-white transition-colors cursor-pointer mb-2"
+      class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer mb-2"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -53,25 +53,25 @@
       <span>Back to Team Setup ({teamsCount} teams)</span>
     </button>
 
-    <h2 class="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
+    <h2 class="text-2xl md:text-3xl font-extrabold text-slate-800 tracking-tight">
       Choose tournament type:
     </h2>
-    <p class="text-sm text-white/60">
+    <p class="text-sm text-slate-600 font-medium">
       Select the pairing algorithm that best fits your schedule and competitive format.
     </p>
   </div>
 
-  <!-- Format Cards List (Modeled after Reference Image 1) -->
-  <div class="space-y-3.5 pt-2">
+  <!-- Format Cards List -->
+  <div class="space-y-4 pt-2">
     {#each formats as format (format.id)}
       <button 
         type="button"
         onclick={() => onSelectFormat(format.id)}
-        class="card-theme w-full rounded-2xl p-5 md:p-6 text-left flex items-center justify-between gap-4 group cursor-pointer hover:border-[#10B981]/50 hover:bg-[#26413C]/90 active:scale-[0.99] transition-all"
+        class="card-theme w-full rounded-2xl p-5 md:p-6 text-left flex items-center justify-between gap-4 group cursor-pointer hover:shadow-[10px_10px_20px_#b8b8b8,-10px_-10px_20px_#ffffff] active:scale-[0.99] transition-all"
       >
         <div class="flex items-center gap-4 md:gap-5 min-w-0">
           <!-- Icon / Diagram illustration -->
-          <div class="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-black/40 border border-white/10 group-hover:border-[#10B981]/40 flex items-center justify-center shrink-0 text-[#10B981] shadow-inner transition-colors">
+          <div class="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-[#e0e5ec] border border-white/80 flex items-center justify-center shrink-0 text-emerald-600 shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] group-hover:text-emerald-700 transition-colors">
             {#if format.icon === 'grid'}
               <!-- Round Robin Grid Icon -->
               <svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
@@ -101,17 +101,17 @@
 
           <!-- Text Details -->
           <div class="space-y-1 min-w-0">
-            <h3 class="text-lg md:text-xl font-bold text-white group-hover:text-[#10B981] transition-colors">
+            <h3 class="text-lg md:text-xl font-bold text-slate-800 group-hover:text-emerald-600 transition-colors">
               {format.title}
             </h3>
-            <p class="text-xs md:text-sm text-white/60 leading-relaxed font-normal">
+            <p class="text-xs md:text-sm text-slate-600 leading-relaxed font-medium">
               {format.description}
             </p>
           </div>
         </div>
 
-        <!-- Right Arrow (Reference Image 1 >) -->
-        <div class="w-8 h-8 rounded-full bg-white/5 group-hover:bg-[#10B981] text-white/50 group-hover:text-[#070707] flex items-center justify-center shrink-0 font-bold transition-all group-hover:translate-x-1">
+        <!-- Right Arrow -->
+        <div class="w-8 h-8 rounded-full bg-[#e0e5ec] shadow-[3px_3px_6px_#bebebe,-3px_-3px_6px_#ffffff] group-hover:bg-emerald-500 text-slate-600 group-hover:text-white flex items-center justify-center shrink-0 font-bold transition-all group-hover:translate-x-1">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
           </svg>
