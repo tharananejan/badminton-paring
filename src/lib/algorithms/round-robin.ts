@@ -96,8 +96,6 @@ export const RoundRobinAlgorithm: PairingAlgorithm = {
               }
               if (match.winner?.id === match.team1.id) s.won++;
               else s.lost++;
-            } else if (match.status === 'bye') {
-              s.won++;
             }
           }
           if (match.team2 && statsMap.has(match.team2.id)) {

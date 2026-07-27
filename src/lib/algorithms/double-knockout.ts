@@ -166,6 +166,16 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
 
     const nextLRoundNum = losersRounds.length + 1;
 
+    const pastMatchups = new Set<string>();
+    for (const r of currentRounds) {
+      for (const m of r.matches) {
+        if (m.team1 && m.team2) {
+          pastMatchups.add(`${m.team1.id}|${m.team2.id}`);
+          pastMatchups.add(`${m.team2.id}|${m.team1.id}`);
+        }
+      }
+    }
+
     if (nextLRoundNum === 1) {
       if (newWLosers.length >= 1) {
         const matches: Match[] = [];
@@ -205,48 +215,74 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
         });
       }
     } else if (nextLRoundNum % 2 === 0) {
-      if (latestLWinners.length > 0 && newWLosers.length > 0) {
+      if (latestLWinners.length > 0 || newWLosers.length > 0) {
         const matches: Match[] = [];
         let matchNumber = 1;
+        const remainingB = [...newWLosers];
 
-        // Pair lower bracket winners vs incoming drop-down losers in natural bracket order
-        const pairedWLosers = [...newWLosers].reverse();
-        const count = Math.max(latestLWinners.length, pairedWLosers.length);
-
-        for (let i = 0; i < count; i++) {
-          const t1 = latestLWinners[i];
-          const t2 = pairedWLosers[i];
-
-          if (!t1 || !t2) {
-            const soloTeam = t1 || t2;
+        for (const a of latestLWinners) {
+          if (remainingB.length === 0) {
             matches.push({
               id: `l-r${nextLRoundNum}-m${matchNumber}`,
               roundNumber: nextLRoundNum,
               matchNumber: matchNumber++,
-              team1: soloTeam,
+              team1: a,
               team2: undefined,
               status: 'bye',
-              winner: soloTeam,
+              winner: a,
               bracket: 'losers'
             });
-          } else {
-            matches.push({
-              id: `l-r${nextLRoundNum}-m${matchNumber}`,
-              roundNumber: nextLRoundNum,
-              matchNumber: matchNumber++,
-              team1: t1,
-              team2: t2,
-              status: 'pending',
-              bracket: 'losers'
-            });
+            continue;
           }
+
+          // Search remainingB in reverse order for bracket crossover, avoiding repeat matchups
+          let chosenIdx = -1;
+          for (let j = remainingB.length - 1; j >= 0; j--) {
+            const b = remainingB[j];
+            if (!pastMatchups.has(`${a.id}|${b.id}`)) {
+              chosenIdx = j;
+              break;
+            }
+          }
+
+          if (chosenIdx === -1) {
+            chosenIdx = remainingB.length - 1;
+          }
+
+          const [b] = remainingB.splice(chosenIdx, 1);
+          matches.push({
+            id: `l-r${nextLRoundNum}-m${matchNumber}`,
+            roundNumber: nextLRoundNum,
+            matchNumber: matchNumber++,
+            team1: a,
+            team2: b,
+            status: 'pending',
+            bracket: 'losers'
+          });
         }
-        newRoundsToAdd.push({
-          roundNumber: nextRoundNum++,
-          name: `Losers Round ${nextLRoundNum}`,
-          bracket: 'losers',
-          matches
-        });
+
+        // Remaining teams in remainingB get BYEs
+        for (const b of remainingB) {
+          matches.push({
+            id: `l-r${nextLRoundNum}-m${matchNumber}`,
+            roundNumber: nextLRoundNum,
+            matchNumber: matchNumber++,
+            team1: b,
+            team2: undefined,
+            status: 'bye',
+            winner: b,
+            bracket: 'losers'
+          });
+        }
+
+        if (matches.length > 0) {
+          newRoundsToAdd.push({
+            roundNumber: nextRoundNum++,
+            name: `Losers Round ${nextLRoundNum}`,
+            bracket: 'losers',
+            matches
+          });
+        }
       }
     } else {
       // Odd Losers Round (L3, L5...): Pair previous LB winners among themselves
@@ -318,8 +354,6 @@ export const DoubleKnockoutAlgorithm: PairingAlgorithm = {
               }
               if (match.winner?.id === match.team1.id) s.won++;
               else s.lost++;
-            } else if (match.status === 'bye') {
-              s.won++;
             }
           }
 

@@ -141,8 +141,6 @@ export const KnockoutAlgorithm: PairingAlgorithm = {
               }
               if (match.winner?.id === match.team1.id) s.won++;
               else s.lost++;
-            } else if (match.status === 'bye') {
-              s.won++;
             }
           }
           if (match.team2 && statsMap.has(match.team2.id)) {
@@ -175,8 +173,11 @@ export const KnockoutAlgorithm: PairingAlgorithm = {
       };
     });
 
-    // Sort by wins, then setsDiff, then pointsDifference
+    // Sort by lastRoundReached, then wins, then setsDiff, then pointsDifference
     standings.sort((a, b) => {
+      const sA = statsMap.get(a.team.id)!;
+      const sB = statsMap.get(b.team.id)!;
+      if (sB.lastRoundReached !== sA.lastRoundReached) return sB.lastRoundReached - sA.lastRoundReached;
       if (b.won !== a.won) return b.won - a.won;
       if (b.setsDifference !== a.setsDifference) return b.setsDifference - a.setsDifference;
       return b.pointsDifference - a.pointsDifference;

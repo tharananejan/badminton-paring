@@ -165,6 +165,53 @@ describe('Double Elimination (Double Knockout)', () => {
     expect(wR2.matches.every(m => m.status === 'pending')).toBe(true);
     expect(wR2.matches.some(m => m.status === 'bye')).toBe(false);
   });
+
+  it('does not count BYEs as match wins in standings before matches are played', () => {
+    const manager = TournamentManager.createTournament('Double KO 5 Teams', 'double-knockout', ['Team 1', 'Team 2', 'Team 3', 'Team 4', 'Team 5']);
+    const state = manager.getState();
+
+    // Verify all teams have 0 played and 0 won at start
+    for (const standing of state.standings) {
+      expect(standing.played).toBe(0);
+      expect(standing.won).toBe(0);
+      expect(standing.lost).toBe(0);
+    }
+  });
+
+  it('prevents repeat matchups in Losers Round 2 for 5-team double elimination', () => {
+    const manager = TournamentManager.createTournament('Double KO 5 Teams', 'double-knockout', ['Team 1', 'Team 2', 'Team 3', 'Team 4', 'Team 5']);
+    let state = manager.getState();
+
+    // W1: Team 4 vs Team 5 -> Team 5 wins, Team 4 loses to L1
+    const wR1Match = state.rounds[0].matches.find(m => m.status === 'pending')!;
+    manager.recordMatchScore(wR1Match.id, '15-21'); // Team 5 wins over Team 4
+
+    // Advance -> creates Winners Round 2 and Losers Round 1 (Team 4 BYE)
+    manager.advanceRound();
+    state = manager.getState();
+
+    const wR2 = state.rounds.find(r => r.name === 'Winners Round 2')!;
+    // Play W2: Match 1 (Team 1 vs Team 2 -> Team 1 wins, Team 2 drops to L2)
+    // Play W2: Match 2 (Team 3 vs Team 5 -> Team 3 wins, Team 5 drops to L2)
+    manager.recordMatchScore(wR2.matches[0].id, '21-10'); // Team 1 beats Team 2
+    manager.recordMatchScore(wR2.matches[1].id, '21-12'); // Team 3 beats Team 5
+
+    // Advance -> creates Losers Round 2
+    manager.advanceRound();
+    state = manager.getState();
+
+    const lR2 = state.rounds.find(r => r.name === 'Losers Round 2')!;
+    expect(lR2).toBeDefined();
+
+    // In Losers Round 2, Team 4 (who lost to Team 5 in W1) MUST be paired against Team 2, NOT Team 5 again!
+    const pendingMatch = lR2.matches.find(m => m.status === 'pending')!;
+    expect(pendingMatch).toBeDefined();
+
+    const pairedTeamNames = [pendingMatch.team1?.name, pendingMatch.team2?.name];
+    expect(pairedTeamNames).toContain('Team 4');
+    expect(pairedTeamNames).toContain('Team 2');
+    expect(pairedTeamNames).not.toContain('Team 5');
+  });
 });
 
 describe('Round Robin Algorithm', () => {
